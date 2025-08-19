@@ -1,0 +1,8 @@
+streamlit
+requests
+pandas
+math
+random
+json
+re
+urlib.parse
