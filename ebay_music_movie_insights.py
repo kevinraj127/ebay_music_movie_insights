@@ -7,7 +7,7 @@ import json
 import re
 from urllib.parse import urlencode
 
-# =========================
+# ========================= 
 # USER CONFIG (secrets)
 # =========================
 
@@ -21,26 +21,20 @@ CLIENT_SECRET = st.secrets["ebay"]["CLIENT_SECRET"]
 CATEGORY_IDS = {
     "CDs": "176984",
     "Cassettes": "176983",
-    "DVDs": "617",
-    "Blu-ray": "617",   # Same as DVD
-    "Headphones": "112529",
+    "DVDs/Blu-ray": "617",
 }
 
 KEY_ASPECTS = {
     "CDs": ["Artist", "Genre", "Record Label", "Release Year", "Format"],
     "Cassettes": ["Artist", "Genre", "Record Label", "Release Year", "Format"],
-    "DVDs": ["Director", "Genre", "Studio", "Release Year", "Format"],
-    "Blu-ray": ["Director", "Genre", "Studio", "Release Year", "Format"],
-    "Headphones": ["Brand", "Model", "Type", "Color", "Connectivity"],
+    "DVDs/Blu-ray": ["Director", "Genre", "Studio", "Release Year", "Format"],
 }
 
 # Trend targets we actually rank
 TREND_TARGETS = {
     "CDs": ["Decade", "Genre", "Artist", "Record Label"],
     "Cassettes": ["Decade", "Genre", "Artist", "Record Label"],
-    "DVDs": ["Decade", "Genre", "Studio", "Director"],
-    "Blu-ray": ["Decade", "Genre", "Studio", "Director"],
-    "Headphones": ["Brand", "Model", "Type"],
+    "DVDs/Blu-ray": ["Decade", "Genre", "Studio", "Director"],
 }
 
 SORT_OPTIONS = {
@@ -79,10 +73,19 @@ def get_access_token():
 _SPLIT_PAT = re.compile(r"\s*(,|/|;|\s&\s|\sand\s)\s*", flags=re.IGNORECASE)
 
 def _normalize_multival(val: str):
+    """Extract multiple values from a string, but return only the first one for CSV storage"""
     if not isinstance(val, str) or not val.strip():
         return []
     s = _SPLIT_PAT.sub("|", val)
-    return [p.strip() for p in s.split("|") if p.strip()]
+    parts = [p.strip() for p in s.split("|") if p.strip()]
+    return parts
+
+def _get_first_value(val: str):
+    """Get only the first value from a multi-value string for CSV storage"""
+    if not isinstance(val, str) or not val.strip():
+        return None
+    parts = _normalize_multival(val)
+    return parts[0] if parts else None
 
 def parse_year(value: str):
     if not isinstance(value, str):
@@ -120,7 +123,7 @@ def year_to_decade(year: int):
 def extract_item_aspects(item: dict, key_aspects: list):
     """
     Build two dicts:
-      aspects_mapped -> only requested key aspects (best-effort)
+      aspects_mapped -> only requested key aspects (best-effort) - SINGLE VALUES ONLY
       all_raw_aspects -> everything found (human readable)
     Works with detail response; also handles summary fallbacks.
     """
@@ -155,37 +158,37 @@ def extract_item_aspects(item: dict, key_aspects: list):
     if "Genre" not in all_raw and "Style" in all_raw:
         all_raw["Genre"] = all_raw["Style"]
 
-    # Map with tolerant synonyms
+    # Map with tolerant synonyms - BUT RETURN ONLY FIRST VALUE
     def match_value(target_name: str):
         if target_name in all_raw:
-            return all_raw[target_name]
+            return _get_first_value(all_raw[target_name])
         tn = target_name.lower()
         for raw_name, raw_val in all_raw.items():
             rn = raw_name.lower()
             if rn == tn:
-                return raw_val
+                return _get_first_value(raw_val)
             if tn == "artist" and any(x in rn for x in ["artist", "performer", "musician"]):
-                return raw_val
+                return _get_first_value(raw_val)
             if tn == "director" and "director" in rn:
-                return raw_val
+                return _get_first_value(raw_val)
             if tn == "genre" and any(x in rn for x in ["genre", "style"]):
-                return raw_val
+                return _get_first_value(raw_val)
             if tn == "record label" and any(x in rn for x in ["label", "record label", "publisher", "record company"]):
-                return raw_val
+                return _get_first_value(raw_val)
             if tn == "studio" and any(x in rn for x in ["studio", "publisher", "label"]):
-                return raw_val
+                return _get_first_value(raw_val)
             if tn == "release year" and any(x in rn for x in ["release year", "year", "release date", "published"]):
-                return raw_val
+                return _get_first_value(raw_val)
             if tn == "brand" and "brand" in rn:
-                return raw_val
+                return _get_first_value(raw_val)
             if tn == "model" and "model" in rn:
-                return raw_val
+                return _get_first_value(raw_val)
             if tn == "type" and "type" in rn:
-                return raw_val
+                return _get_first_value(raw_val)
             if tn == "color" and "color" in rn:
-                return raw_val
+                return _get_first_value(raw_val)
             if tn == "connectivity" and "connectivity" in rn:
-                return raw_val
+                return _get_first_value(raw_val)
         return None
 
     aspects_mapped = {k: match_value(k) for k in key_aspects}
@@ -224,6 +227,7 @@ def fetch_category_data(category: str, min_price: float, max_price: float, sort_
     1) Pull up to listings_to_fetch summaries (fast)
     2) Randomly pick enrich_target items and call detail endpoint to get aspects
     3) Merge aspects and derive Decade
+    4) Store only FIRST value for multi-value fields in CSV columns
     """
     token = get_access_token()
     if not token:
@@ -301,7 +305,7 @@ def fetch_category_data(category: str, min_price: float, max_price: float, sort_
             df[k] = pd.NA
     for iid, (mapped, raw) in enrich_map.items():
         for k, v in mapped.items():
-            df.at[iid, k] = v
+            df.at[iid, k] = v  # v is already the first value only
         df.at[iid, "Raw_Aspects_JSON"] = json.dumps(raw, ensure_ascii=False)
         df.at[iid, "Raw_Aspects_Count"] = len(raw)
     df.reset_index(inplace=True)
@@ -319,12 +323,36 @@ def fetch_category_data(category: str, min_price: float, max_price: float, sort_
 # =========================
 # ANALYSIS
 # =========================
-def _explode_multi(df: pd.DataFrame, col: str) -> pd.DataFrame:
+def _explode_multi_for_analysis(df: pd.DataFrame, col: str) -> pd.DataFrame:
+    """For ANALYSIS ONLY - explode multi-values to see all genres in trend analysis"""
     if col not in df.columns:
         df = df.copy()
         df[col] = pd.NA
         return df
-    lists = df[col].fillna("").astype(str).apply(_normalize_multival)
+    
+    # For analysis, we want to see all values, so we reconstruct them from raw JSON if available
+    def extract_all_values(row):
+        # First try the single value from the column
+        single_val = row[col]
+        if pd.notna(single_val) and str(single_val).strip():
+            # Also check raw JSON for additional values
+            raw_json = row.get("Raw_Aspects_JSON")
+            if pd.notna(raw_json):
+                try:
+                    raw_data = json.loads(raw_json)
+                    # Look for Genre in raw data
+                    for key, value in raw_data.items():
+                        if key.lower() in ["genre", "style"] and value:
+                            all_vals = _normalize_multival(value)
+                            if all_vals:
+                                return all_vals
+                except:
+                    pass
+            # Fallback to single value as list
+            return [str(single_val)]
+        return []
+    
+    lists = df.apply(extract_all_values, axis=1)
     out = df.copy()
     out[col] = lists
     out = out.explode(col)
@@ -334,7 +362,7 @@ def _explode_multi(df: pd.DataFrame, col: str) -> pd.DataFrame:
 def analyze_profitable_aspect(df: pd.DataFrame, aspect: str, min_occurrences: int = 3):
     if df.empty or "Price" not in df.columns:
         return pd.DataFrame()
-    work = _explode_multi(df, aspect).dropna(subset=[aspect])
+    work = _explode_multi_for_analysis(df, aspect).dropna(subset=[aspect])
     if work.empty:
         return pd.DataFrame()
 
@@ -359,6 +387,7 @@ def analyze_profitable_aspect(df: pd.DataFrame, aspect: str, min_occurrences: in
 # =========================
 st.set_page_config(page_title="eBay Reselling Trends (Aspects)", page_icon="📈", layout="wide")
 st.title("📈 eBay Reselling Trends — Aspect Miner")
+st.markdown("**Note:** CSV exports contain only the **first genre/value** for clean data analysis, but trend analysis shows all genres.")
 
 st.sidebar.header("⚙️ Parameters")
 category = st.sidebar.selectbox("📦 Category", list(CATEGORY_IDS.keys()), index=0)
@@ -400,6 +429,7 @@ if st.sidebar.button("🚀 Analyze Trends", type="primary"):
 
     with tab1:
         st.subheader("🎯 Most Profitable Aspect Values (Median premium vs. global median)")
+        st.caption("⚠️ Trend analysis shows ALL genres/values found (exploded from raw data)")
         frames = []
         for tgt in trend_targets:
             tdf = analyze_profitable_aspect(df, tgt, min_occurrences=min_occurrences)
@@ -424,6 +454,7 @@ if st.sidebar.button("🚀 Analyze Trends", type="primary"):
 
     with tab2:
         st.subheader("📋 Listings with Key Aspects (enriched sample included)")
+        st.caption("⚠️ Displayed data shows FIRST genre/value only (clean for CSV export)")
         display_cols = ['Title', 'Price', 'Condition', 'Seller', 'Item_URL'] + key_aspects + ["Decade"]
         display_cols = [c for c in display_cols if c in df.columns]
         st.dataframe(
@@ -442,6 +473,7 @@ if st.sidebar.button("🚀 Analyze Trends", type="primary"):
 
     with tab3:
         st.subheader("🔍 Sample Raw Aspect JSON (from enriched items)")
+        st.caption("Raw data contains ALL genres/values found - only first is used in CSV")
         sample = df[df["Raw_Aspects_JSON"].notna()].head(10)
         if sample.empty:
             st.info("No enriched items found (unexpected).")
@@ -472,11 +504,12 @@ if st.sidebar.button("🚀 Analyze Trends", type="primary"):
         else:
             st.write("Not enough variance to draw histogram.")
 
-        # quick breakdowns for trend targets
+        # quick breakdowns for trend targets (these show all values for analysis)
+        st.caption("⚠️ Breakdowns below show ALL values for comprehensive analysis")
         for aspect in TREND_TARGETS.get(category, []):
             if aspect in df.columns and df[aspect].notna().sum() > 0:
-                st.subheader(f"Top {aspect} by Median Price (exploded)")
-                work = _explode_multi(df, aspect).dropna(subset=[aspect])
+                st.subheader(f"Top {aspect} by Median Price (all values)")
+                work = _explode_multi_for_analysis(df, aspect).dropna(subset=[aspect])
                 stats = (work.groupby(aspect)["Price"]
                          .agg(Count="count", Median_Price="median")
                          .round(2)
@@ -490,5 +523,6 @@ if st.sidebar.button("🚀 Analyze Trends", type="primary"):
 
     st.markdown("---")
     st.subheader("📥 Download Full Dataset")
+    st.caption("⚠️ CSV contains FIRST genre/value only for clean data analysis")
     st.download_button(f"Download {category} dataset (CSV)", df.to_csv(index=False),
                        file_name=f"{category}_dataset_{detail_calls}.csv", mime="text/csv")
