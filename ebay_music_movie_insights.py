@@ -45,7 +45,7 @@ SORT_OPTIONS = {
     "Ending Soonest": "endTime",
 }
 
-MAX_PER_CALL = 1000
+MAX_PER_CALL = 200
 CATEGORY_TREE_ID = "0"
 
 # =========================
