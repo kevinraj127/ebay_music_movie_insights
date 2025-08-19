@@ -386,7 +386,7 @@ def analyze_profitable_aspect(df: pd.DataFrame, aspect: str, min_occurrences: in
 # UI
 # =========================
 st.set_page_config(page_title="eBay Reselling Trends (Aspects)", page_icon="📈", layout="wide")
-st.title("📈 eBay Reselling Trends — Aspect Miner")
+st.title("📈 eBay Reselling Trends - Media")
 st.markdown("**Note:** CSV exports contain only the **first genre/value** for clean data analysis, but trend analysis shows all genres.")
 
 st.sidebar.header("⚙️ Parameters")
