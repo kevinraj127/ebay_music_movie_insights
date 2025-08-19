@@ -393,8 +393,8 @@ st.sidebar.header("⚙️ Parameters")
 category = st.sidebar.selectbox("📦 Category", list(CATEGORY_IDS.keys()), index=0)
 
 # Configurable sample sizes
-listings_count = st.sidebar.number_input("📊 Listings to Fetch", value=150, min_value=50, max_value=500, step=25)
-detail_calls = st.sidebar.number_input("🔍 Detail Calls (Aspect Enrichment)", value=150, min_value=25, max_value=300, step=25)
+listings_count = st.sidebar.number_input("📊 Listings to Fetch", value=150, min_value=50, max_value=1000, step=25)
+detail_calls = st.sidebar.number_input("🔍 Detail Calls (Aspect Enrichment)", value=150, min_value=25, max_value=1000, step=25)
 
 min_price = st.sidebar.number_input("💰 Min Price ($)", value=5.0, min_value=0.0, step=1.0)
 max_price = st.sidebar.number_input("💰 Max Price ($)", value=100.0, min_value=1.0, step=1.0)
