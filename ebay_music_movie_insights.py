@@ -22,12 +22,14 @@ CATEGORY_IDS = {
     "CDs": "176984",
     "Cassettes": "176983",
     "DVDs/Blu-ray": "617",
+    "Vinyl Records": "176985",
 }
 
 KEY_ASPECTS = {
     "CDs": ["Artist", "Genre", "Record Label", "Release Year", "Format"],
     "Cassettes": ["Artist", "Genre", "Record Label", "Release Year", "Format"],
     "DVDs/Blu-ray": ["Director", "Genre", "Studio", "Release Year", "Format"],
+    "Vinyl Records": ["Artist", "Genre", "Record Label", "Release Year", "Speed", "Format"],
 }
 
 # Trend targets we actually rank
@@ -35,6 +37,7 @@ TREND_TARGETS = {
     "CDs": ["Decade", "Genre", "Artist", "Record Label"],
     "Cassettes": ["Decade", "Genre", "Artist", "Record Label"],
     "DVDs/Blu-ray": ["Decade", "Genre", "Studio", "Director"],
+    "Vinyl Records": ["Decade", "Genre", "Artist", "Record Label"],
 }
 
 SORT_OPTIONS = {
@@ -178,6 +181,10 @@ def extract_item_aspects(item: dict, key_aspects: list):
             if tn == "studio" and any(x in rn for x in ["studio", "publisher", "label"]):
                 return _get_first_value(raw_val)
             if tn == "release year" and any(x in rn for x in ["release year", "year", "release date", "published"]):
+                return _get_first_value(raw_val)
+            if tn == "speed" and any(x in rn for x in ["speed", "rpm"]):
+                return _get_first_value(raw_val)
+            if tn == "format" and any(x in rn for x in ["format", "size", "vinyl type"]):
                 return _get_first_value(raw_val)
             if tn == "brand" and "brand" in rn:
                 return _get_first_value(raw_val)
