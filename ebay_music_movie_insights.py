@@ -201,7 +201,7 @@ def browse_search(token: str, category_id: str, min_price: float, max_price: flo
                   limit: int, offset: int, sort_order: str):
     params = {
         "category_ids": category_id,
-        "filter": f"price:[{min_price:.2f}..{max_price:.2f}],priceCurrency:USD,buyingOptions:{{FIXED_PRICE}},itemLocationCountry:US",
+        "filter": f"price:[{min_price:.2f}..{max_price:.2f}],priceCurrency:USD,buyingOptions:{{FIXED_PRICE|BEST_OFFER}},itemLocationCountry:US",
         "delivery_country": "US",
         "limit": min(MAX_PER_CALL, limit),
         "offset": offset,
